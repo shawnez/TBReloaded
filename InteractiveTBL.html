@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Map</title>
+    <!-- Include jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- Include Leaflet.js -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden; /* Prevent body overflow when the map is dragged */
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            height: 100vh; /* Take up 100% of the viewport height */
+        }
+
+        #overlay {
+            position: absolute;
+            top: 10px; /* Adjust the top position as needed */
+            right: 10px; /* Adjust the right position as needed */
+            max-width: 50%; /* Set a maximum width for the overlay */
+            background-color: rgba(180, 180, 180, 0.9);
+            padding: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            overflow: auto; /* Enable scrolling if the task list overflows */
+            z-index: 1000; /* Set a high z-index to ensure it is above the map */
+        }
+
+        #taskList {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+            color: white;
+        }
+
+        .markerItem {
+            margin-bottom: 5px;
+            cursor: pointer;
+            text-shadow: -1px -1px 0 black, 1px -1px 0 black, -1px 1px 0 black, 1px 1px 0 black;
+        }
+
+        .complete {
+            text-decoration: line-through;
+        }
+
+        .colorCircle {
+            display: inline-block;
+            width: 1px;
+            height: 1px;
+            border-radius: 1%;
+            margin-right: 5px;
+
+        }
+
+        .green { background-color: green; }
+        .yellow { background-color: yellow; }
+        .orange { background-color: orange; }
+        .purple { background-color: purple; }
+        .red { background-color: red; }
+    </style>
+</head>
+<body>
+
+<!-- Create a container for the map -->
+<div id="map"></div>
+
+<!-- Create an overlay for the task list -->
+<div id="overlay">
+    <h2>Task List</h2>
+    <button onclick="removeCompletedMarkers()">Remove Completed</button>
+    <ul id="taskList"></ul>
+</div>
+
+<!-- Include Leaflet.js -->
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<script>
+    var map = L.map('map', { dragging: true }).setView([0, 0], 2);
+
+    // Add an image overlay to the map
+    var imageUrl = 'https://oldschool.runescape.wiki/images/Old_School_RuneScape_world_map.png?6186c'; // Replace with the path to your image
+    var imageBounds = [[-90, -330], [90, 330]];
+    L.imageOverlay(imageUrl, imageBounds).addTo(map);
+
+    // Task list variables
+    var taskList = $('#taskList');
+    var taskId = 1;
+
+    // Dictionary to store marker references
+    var markers = {};
+
+    // Dictionary to store completed markers
+    var completedMarkers = {};
+
+    // Event listener for the map click
+    map.on('click', function (e) {
+        var markerName = prompt('Enter a name for the marker:');
+        var markerColor = prompt('Choose a color for the marker (green, yellow, orange, purple, red):');
+
+        if (markerName !== null && markerColor !== null) {
+            // Add a marker on map click
+            var marker = L.marker(e.latlng, { draggable: true }).addTo(map);
+
+            // Create a colored circle based on the selected color
+            var colorCircle = $('<div class="colorCircle ' + markerColor + '"></div>');
+
+            // Create a task item in the overlay
+            var markerItem = $('<li class="markerItem ' + markerColor + '">' +
+                '<label>' +
+                '<input type="checkbox" class="checkbox"> ' +
+                '<span>' + markerName + '</span> ' +
+                '</label>' +
+                '</li>');
+
+            // Append the colored circle to the markerItem
+            markerItem.find('label').prepend(colorCircle);
+
+            taskList.append(markerItem);
+
+            // Store marker reference in the dictionary
+            markers[taskId] = { marker: marker, name: markerName, color: markerColor, listItem: markerItem };
+
+            // Add a tooltip with the marker name
+            marker.bindTooltip(markerName, { sticky: false, direction: 'up', opacity: 0.9 }).openTooltip();
+
+            // Event listener for checkbox change
+            markerItem.find('.checkbox').change(function () {
+                var markerId = $(this).closest('.markerItem').data('id');
+
+                if (this.checked) {
+                    markers[markerId].marker.bindPopup('Task Completed!').openPopup();
+                    markers[markerId].listItem.addClass('complete');
+
+                    // Move the completed marker to the completedMarkers dictionary
+                    completedMarkers[markerId] = markers[markerId];
+                    delete markers[markerId];
+                } else {
+                    markers[markerId].marker.closePopup();
+                    markers[markerId].listItem.removeClass('complete');
+
+                    // Move the uncompleted marker back to the markers dictionary
+                    markers[markerId] = completedMarkers[markerId];
+                    delete completedMarkers[markerId];
+                }
+
+                // Save markers to cookies after each change
+                saveMarkersToCookies();
+            });
+
+            // Associate the markerId with the markerItem
+            markerItem.data('id', taskId);
+
+            taskId++;
+        }
+    });
+
+    // Function to remove completed markers from the map
+    function removeCompletedMarkers() {
+        for (var id in completedMarkers) {
+            completedMarkers[id].marker.remove();
+            completedMarkers[id].listItem.remove();
+        }
+        completedMarkers = {};
+
+        // Save markers to cookies after removing completed markers
+        saveMarkersToCookies();
+    }
+
+    // Function to save markers to cookies
+    function saveMarkersToCookies() {
+        // Extract only the necessary information from markers
+        const serializedMarkers = {};
+        for (const id in markers) {
+            const markerData = markers[id];
+            const serializedMarker = {
+                latlng: markerData.marker.getLatLng(),
+                name: markerData.name,
+                color: markerData.color,
+            };
+            serializedMarkers[id] = serializedMarker;
+        }
+
+        // Extract only the necessary information from completedMarkers
+        const serializedCompletedMarkers = {};
+        for (const id in completedMarkers) {
+            const completedMarkerData = completedMarkers[id];
+            const serializedCompletedMarker = {
+                latlng: completedMarkerData.marker.getLatLng(),
+                name: completedMarkerData.name,
+                color: completedMarkerData.color,
+            };
+            serializedCompletedMarkers[id] = serializedCompletedMarker;
+        }
+
+        document.cookie = 'markers=' + JSON.stringify(serializedMarkers) + '; expires=Fri, 31 Dec 9999 23:59:59 GMT';
+        document.cookie = 'completedMarkers=' + JSON.stringify(serializedCompletedMarkers) + '; expires=Fri, 31 Dec 9999 23:59:59 GMT';
+    }
+
+    // Function to load markers from cookies
+    function loadMarkersFromCookies() {
+        var cookies = document.cookie.split(';');
+        var markersCookie = cookies.find(cookie => cookie.trim().startsWith('markers='));
+        var completedMarkersCookie = cookies.find(cookie => cookie.trim().startsWith('completedMarkers='));
+
+        if (markersCookie) {
+            var markersData = markersCookie.split('=')[1];
+            var parsedMarkers = JSON.parse(markersData);
+
+            for (var id in parsedMarkers) {
+                var markerData = parsedMarkers[id];
+                var marker = L.marker(markerData.latlng, { draggable: true }).addTo(map);
+                var colorCircle = $('<div class="colorCircle ' + markerData.color + '"></div>');
+                var markerItem = $('<li class="markerItem ' + markerData.color + '">' +
+                    '<label>' +
+                    '<input type="checkbox" class="checkbox"> ' +
+                    '<span>' + markerData.name + '</span> ' +
+                    '</label>' +
+                    '</li>');
+
+                markerItem.find('label').prepend(colorCircle);
+                taskList.append(markerItem);
+
+                markers[id] = { marker: marker, name: markerData.name, color: markerData.color, listItem: markerItem };
+
+                marker.bindTooltip(markerData.name, { sticky: false, direction: 'up', opacity: 0.9 }).openTooltip();
+
+                markerItem.find('.checkbox').change(function () {
+                    var markerId = $(this).closest('.markerItem').data('id');
+
+                    if (this.checked) {
+                        markers[markerId].marker.bindPopup('Task Completed!').openPopup();
+                        markers[markerId].listItem.addClass('complete');
+                        completedMarkers[markerId] = markers[markerId];
+                        delete markers[markerId];
+                    } else {
+                        markers[markerId].marker.closePopup();
+                        markers[markerId].listItem.removeClass('complete');
+                        markers[markerId] = completedMarkers[markerId];
+                        delete completedMarkers[markerId];
+                    }
+
+                    saveMarkersToCookies();
+                });
+
+                markerItem.data('id', id);
+            }
+        }
+
+        if (completedMarkersCookie) {
+            var completedMarkersData = completedMarkersCookie.split('=')[1];
+            var parsedCompletedMarkers = JSON.parse(completedMarkersData);
+
+            for (var id in parsedCompletedMarkers) {
+                var completedMarkerData = parsedCompletedMarkers[id];
+                var marker = L.marker(completedMarkerData.latlng, { draggable: true }).addTo(map);
+                var colorCircle = $('<div class="colorCircle ' + completedMarkerData.color + '"></div>');
+                var markerItem = $('<li class="markerItem ' + completedMarkerData.color + ' complete">' +
+                    '<label>' +
+                    '<input type="checkbox" class="checkbox" checked> ' +
+                    '<span>' + completedMarkerData.name + '</span> ' +
+                    '</label>' +
+                    '</li>');
+
+                markerItem.find('label').prepend(colorCircle);
+                taskList.append(markerItem);
+
+                completedMarkers[id] = { marker: marker, name: completedMarkerData.name, color: completedMarkerData.color, listItem: markerItem };
+
+                marker.bindTooltip(completedMarkerData.name, { sticky: false, direction: 'up', opacity: 0.9 }).openTooltip();
+
+                markerItem.find('.checkbox').change(function () {
+                    var markerId = $(this).closest('.markerItem').data('id');
+
+                    if (!this.checked) {
+                        completedMarkers[markerId].marker.closePopup();
+                        completedMarkers[markerId].listItem.removeClass('complete');
+                        markers[markerId] = completedMarkers[markerId];
+                        delete completedMarkers[markerId];
+
+                        saveMarkersToCookies();
+                    }
+                });
+
+                markerItem.data('id', id);
+            }
+        }
+    }
+
+    // Load markers from cookies on page load
+    loadMarkersFromCookies();
+</script>
+
+</body>
+</html>
+
