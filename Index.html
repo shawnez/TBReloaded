@@ -29,17 +29,25 @@
         }
 
         #overlay {
-            position: absolute;
-            top: 20px; /* Adjust the top position as needed */
-            right: 20px; /* Adjust the right position as needed */
-            max-width: 50%; /* Set a maximum width for the overlay */
-            background-color: rgba(180, 180, 180, 0.9);
-            padding: 10px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            overflow: auto; /* Enable scrolling if the task list overflows */
-            z-index: 1000; /* Set a high z-index to ensure it is above the map */
-			
-        }
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    max-width: 50%;
+    background-color: rgba(180, 180, 180, 0.9);
+    padding: 10px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    overflow: auto; /* Enable scrolling if the task list overflows */
+    max-height: calc(100% - 40px); /* Maximum height for the task list */
+    z-index: 1000;
+}
+
+#taskList {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+    color: white;
+    font-family: 'RuneScape UF', sans-serif;
+}
 			#logo {
             position: absolute;
             top: 10px;
@@ -124,11 +132,16 @@
     var taskList = $('#taskList');
     var taskId = 1;
 
-    // Dictionary to store marker references
+    // Dictionary to store markers
     var markers = {};
 
     // Dictionary to store completed markers
     var completedMarkers = {};
+
+    // Generate a unique identifier for each marker
+    function generateMarkerId() {
+        return 'marker_' + new Date().getTime();
+    }
 
     // Event listener for the map click
     map.on('click', function (e) {
@@ -136,8 +149,18 @@
         var markerColor = prompt('Choose a color for the marker (green, yellow, orange, purple, red):');
 
         if (markerName !== null && markerColor !== null) {
+		
             // Add a marker on map click
             var marker = L.marker(e.latlng, { draggable: true }).addTo(map);
+			
+			// Generate a unique markerId
+        var markerId = generateMarkerId();
+
+        // Store marker reference in the dictionary
+        markers[markerId] = { marker: marker, name: markerName, color: markerColor, listItem: markerItem };
+
+        // Save markers to cookies after each change
+        saveMarkersToCookies();
 
             // Create a colored circle based on the selected color
             var colorCircle = $('<div class="colorCircle ' + markerColor + '"></div>');
