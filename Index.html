@@ -8,6 +8,9 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <!-- Include Leaflet.js -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+	<!-- Add link to Old School RuneScape font -->
+	<link href="https://www.dafont.com/runescape-uf.font" rel="stylesheet">
+                
     <style>
         body, html {
             margin: 0;
@@ -27,42 +30,63 @@
 
         #overlay {
             position: absolute;
-            top: 10px; /* Adjust the top position as needed */
-            right: 10px; /* Adjust the right position as needed */
+            top: 20px; /* Adjust the top position as needed */
+            right: 20px; /* Adjust the right position as needed */
             max-width: 50%; /* Set a maximum width for the overlay */
             background-color: rgba(180, 180, 180, 0.9);
             padding: 10px;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
             overflow: auto; /* Enable scrolling if the task list overflows */
             z-index: 1000; /* Set a high z-index to ensure it is above the map */
+			
         }
-
+			#logo {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 220px; /* Adjust the width as needed */
+            height: auto; /* Maintain aspect ratio */
+            z-index: 1002; /* Set a higher z-index than the notepad */
+        }
+		#notepad {
+            position: absolute;
+            top: 350px;
+            left: 12px;
+            width: 200px;
+            height: 200px;
+            resize: both;
+            overflow: auto;
+            background-color: rgba(255, 255, 255, 0.9);
+            border: 1px solid #ccc;
+            padding: 10px;
+            z-index: 1001;
+        }
+		
         #taskList {
-            list-style-type: none;
-            padding: 0;
-            margin: 0;
-            color: white;
-        }
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+    color: white;
+	font-family: 'RuneScape UF', sans-serif;
+}
 
-        .markerItem {
-            margin-bottom: 5px;
-            cursor: pointer;
-            text-shadow: -1px -1px 0 black, 1px -1px 0 black, -1px 1px 0 black, 1px 1px 0 black;
-        }
+	.markerItem {
+    margin-bottom: 5px;
+    cursor: pointer;
+    text-shadow: -1px -1px 0 black, 1px -1px 0 black, -1px 1px 0 black, 1px 1px 0 black;
+    font-	family: 'RuneScape UF', sans-serif;
+    font-size: 16px; /* Adjust the font size as needed */
+}
+
 
         .complete {
             text-decoration: line-through;
         }
 
-        .colorCircle {
-            display: inline-block;
-            width: 1px;
-            height: 1px;
-            border-radius: 1%;
-            margin-right: 5px;
-
-        }
-
+.complete {
+    /* Remove the line-through text decoration */
+    text-decoration: none;
+}
         .green { background-color: green; }
         .yellow { background-color: yellow; }
         .orange { background-color: orange; }
@@ -74,7 +98,8 @@
 
 <!-- Create a container for the map -->
 <div id="map"></div>
-
+<div id="notepad" contenteditable="true"></div>
+<img id="logo" src="https://iili.io/JBmYPrG.png" alt="Logo">
 <!-- Create an overlay for the task list -->
 <div id="overlay">
     <h2>Task List</h2>
@@ -86,6 +111,8 @@
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
 <script>
+
+
     var map = L.map('map', { dragging: true }).setView([0, 0], 2);
 
     // Add an image overlay to the map
@@ -135,28 +162,28 @@
             marker.bindTooltip(markerName, { sticky: false, direction: 'up', opacity: 0.9 }).openTooltip();
 
             // Event listener for checkbox change
-            markerItem.find('.checkbox').change(function () {
-                var markerId = $(this).closest('.markerItem').data('id');
+markerItem.find('.checkbox').change(function () {
+    var markerId = $(this).closest('.markerItem').data('id');
 
-                if (this.checked) {
-                    markers[markerId].marker.bindPopup('Task Completed!').openPopup();
-                    markers[markerId].listItem.addClass('complete');
+    if (markers[markerId] && markers[markerId].marker) { // Add this check
+        if (this.checked) {
+            markers[markerId].marker.bindPopup('Task Completed!').openPopup();
+            markers[markerId].listItem.addClass('complete');
+            completedMarkers[markerId] = markers[markerId];
+            delete markers[markerId];
+        } else {
+            markers[markerId].marker.closePopup();
+            markers[markerId].listItem.removeClass('complete');
+            markers[markerId] = completedMarkers[markerId];
+            delete completedMarkers[markerId];
+        }
 
-                    // Move the completed marker to the completedMarkers dictionary
-                    completedMarkers[markerId] = markers[markerId];
-                    delete markers[markerId];
-                } else {
-                    markers[markerId].marker.closePopup();
-                    markers[markerId].listItem.removeClass('complete');
+        // Save markers to cookies after each change
+        saveMarkersToCookies();
+    }
+});
 
-                    // Move the uncompleted marker back to the markers dictionary
-                    markers[markerId] = completedMarkers[markerId];
-                    delete completedMarkers[markerId];
-                }
 
-                // Save markers to cookies after each change
-                saveMarkersToCookies();
-            });
 
             // Associate the markerId with the markerItem
             markerItem.data('id', taskId);
@@ -296,11 +323,60 @@
             }
         }
     }
+	// Make the notepad resizable
+    var notepad = document.getElementById('notepad');
+    var isResizing = false;
+    var initialWidth, initialHeight, offsetX, offsetY;
 
+    notepad.addEventListener('mousedown', function (e) {
+        if (e.target === notepad && e.offsetX > notepad.offsetWidth - 10 && e.offsetY > notepad.offsetHeight - 10) {
+            isResizing = true;
+            initialWidth = notepad.offsetWidth;
+            initialHeight = notepad.offsetHeight;
+            offsetX = e.clientX;
+            offsetY = e.clientY;
+        }
+    });
+
+    document.addEventListener('mousemove', function (e) {
+        if (isResizing) {
+            notepad.style.width = initialWidth + (e.clientX - offsetX) + 'px';
+            notepad.style.height = initialHeight + (e.clientY - offsetY) + 'px';
+        }
+    });
+
+    document.addEventListener('mouseup', function () {
+        isResizing = false;
+    });
+	// Function to save notes to cookies
+    function saveNotesToCookies() {
+        var notesContent = $('#notepad').html();
+        document.cookie = 'notes=' + encodeURIComponent(notesContent) + '; expires=Fri, 31 Dec 9999 23:59:59 GMT';
+    }
+
+    // Function to load notes from cookies
+    function loadNotesFromCookies() {
+        var cookies = document.cookie.split(';');
+        var notesCookie = cookies.find(cookie => cookie.trim().startsWith('notes='));
+
+        if (notesCookie) {
+            var notesContent = decodeURIComponent(notesCookie.split('=')[1]);
+            $('#notepad').html(notesContent);
+        }
+    }
+
+    // Load notes from cookies on page load
+    loadNotesFromCookies();
+
+    // Save notes to cookies on content change
+    $('#notepad').on('input', function () {
+        saveNotesToCookies();
+    });
     // Load markers from cookies on page load
     loadMarkersFromCookies();
 </script>
 
 </body>
 </html>
+
 
